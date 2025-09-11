@@ -12,6 +12,14 @@ from enum import Enum
 import requests
 from dotenv import load_dotenv
 
+# Prompt builders
+from prompts import (
+    planning_prompt,
+    execution_prompt,
+    synthesis_prompt,
+    tool_interpretation_prompt,
+)
+
 # Load environment variables from a .env file if present
 load_dotenv()
 
@@ -120,24 +128,7 @@ class PlanAndExecuteAgent:
     def create_plan(self, task: str) -> List[Step]:
         """Generate a plan for the given task"""
         
-        prompt = f"""You are a planning agent. Create a detailed step-by-step plan for the following task.
-
-Task: {task}
-
-Requirements:
-1. Break down the task into clear, actionable steps
-2. Each step should be specific and achievable
-3. Format each step EXACTLY as: [STEP] <description>
-4. Include 3-7 steps depending on complexity
-5. Steps should be sequential and build on each other
-
-Example format:
-[STEP] Research the main topic and gather relevant information
-[STEP] Analyze and organize the collected information
-[STEP] Create an outline based on the analysis
-[STEP] Develop the final deliverable
-
-Now create a plan for the given task:"""
+        prompt = planning_prompt(task)
         
         if self.verbose:
             print(f"\n🤔 Creating plan for: {task}")
@@ -186,21 +177,7 @@ Now create a plan for the given task:"""
         
         context = self._get_context()
         
-        prompt = f"""You are an execution agent. Execute the following step and provide a detailed result.
-
-Current Step: {step.description}
-
-Context from previous steps:
-{context}
-
-Instructions:
-1. Execute this step thoroughly
-2. Provide concrete, actionable results
-3. Be specific and detailed
-4. If this involves creation, actually create the content
-5. If this involves analysis, provide the analysis
-
-Execute the step now and provide the result:"""
+        prompt = execution_prompt(step.description, context)
         
         if self.verbose:
             print(f"\n⚙️  Executing Step {step.id}: {step.description}")
@@ -303,20 +280,10 @@ Execute the step now and provide the result:"""
         
         all_results = "\n---\n".join(successful_results)
         
-        prompt = f"""Synthesize the following step results into a comprehensive final answer.
-
-Task that was completed: {self.plan[0].description if self.plan else 'Unknown task'}
-
-Step Results:
-{all_results[:3000]}  # Limit context size
-
-Instructions:
-1. Create a coherent, well-structured summary
-2. Highlight key achievements and findings
-3. Ensure all important information is included
-4. Make it clear and easy to understand
-
-Provide the final synthesized result:"""
+        prompt = synthesis_prompt(
+            self.plan[0].description if self.plan else 'Unknown task',
+            all_results[:3000]
+        )
         
         try:
             final = self.llm.generate(prompt, temperature=0.5, max_tokens=2000)
@@ -397,13 +364,7 @@ class AdvancedPlanExecuteAgent(PlanAndExecuteAgent):
                     tool_result = tool.execute(step.description)
                     
                     # Enhance with LLM interpretation
-                    prompt = f"""Given this tool execution result, provide a comprehensive response:
-                    
-Tool: {tool_name}
-Tool Output: {tool_result}
-Original Step: {step.description}
-
-Provide a detailed interpretation and expansion of this result:"""
+                    prompt = tool_interpretation_prompt(tool_name, tool_result, step.description)
                     
                     enhanced_result = self.llm.generate(prompt, temperature=0.7)
                     step.result = f"{tool_result}\n\nAnalysis: {enhanced_result}"
