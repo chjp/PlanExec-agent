@@ -10,6 +10,10 @@ from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 from enum import Enum
 import requests
+from dotenv import load_dotenv
+
+# Load environment variables from a .env file if present
+load_dotenv()
 
 
 class OpenRouterLLM:

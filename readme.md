@@ -1,22 +1,34 @@
 To use this code:
 
-Install the required package:
+Create and activate a Python virtual environment (recommended):
 
 ```bash
-pip install requests
+# Create a virtual environment in a .venv folder
+python3 -m venv .venv
+
+# Activate it (macOS/Linux)
+source .venv/bin/activate
+```
+
+Install the required packages:
+
+```bash
+pip install -r requirements.txt
 ```
 
 Get your OpenRouter API key from [OpenRouter](https://openrouter.ai/keys)
-Set the environment variable:
+Create a `.env` file (or copy from `.env.example`) with your key:
 
-```bash
-export OPENROUTER_API_KEY='your-api-key-here'
 ```
+OPENROUTER_API_KEY=your-api-key-here
+```
+
+Note: The app automatically loads environment variables from `.env` using `python-dotenv`.
 
 Run the script:
 
 ```bash
-python plan_execute_agent.py
+python agent.py
 ```
 The key components are:
 
