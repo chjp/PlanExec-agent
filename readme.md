@@ -43,37 +43,31 @@ The agent will automatically break down any task into steps, execute each step u
 
 ```mermaid
 flowchart TD
-    A[User Task Input] --> B[PlanAndExecuteAgent.run(task)]
-    B --> C[create_plan(task)]
-    C -->|build prompt| P1[planning_prompt(task)]
-    P1 -->|send| LLM1[OpenRouterLLM.generate]
-    LLM1 -->|plan text| D[Parse steps -> List<Step>]
-    D --> E[Execute loop]
-    E --> F[execute_step(step)]
-    F -->|gather context| CTX[_get_context()]
-    F -->|build prompt| P2[execution_prompt(step, context)]
-    P2 -->|send| LLM2[OpenRouterLLM.generate]
-    LLM2 -->|step result| H[Update step status/result]
-    H -->|next step| E
-    E -->|all steps processed| S[_synthesize_results()]
-    S -->|build prompt| P3[synthesis_prompt(task_desc, results)]
-    P3 -->|send| LLM3[OpenRouterLLM.generate]
-    LLM3 --> R[Final Result]
+    U[User Task Input]
+    U --> RUN[PlanAndExecuteAgent.run]
+    RUN --> PLAN[create_plan]
+    PLAN --> P1[planning_prompt]
+    P1 --> LLM1[OpenRouterLLM.generate]
+    LLM1 --> PARSE[Parse into steps list]
+    PARSE --> LOOP[For each Step]
+    LOOP --> EXEC[execute_step]
+    EXEC --> CTX[_get_context]
+    EXEC --> P2[execution_prompt]
+    P2 --> LLM2[OpenRouterLLM.generate]
+    LLM2 --> UPDATE[Update step status/result]
+    UPDATE --> LOOP
+    LOOP --> SYN[_synthesize_results]
+    SYN --> P3[synthesis_prompt]
+    P3 --> LLM3[OpenRouterLLM.generate]
+    LLM3 --> FINAL[Final Result]
 
-    subgraph Optional Tool Path [AdvancedPlanExecuteAgent]
-        F -->|if step mentions tool| TSEL{Tool found?}
-        TSEL -- Yes --> TEXEC[tool.execute(step.description)]
-        TEXEC --> P4[tool_interpretation_prompt(tool_name, output, step)]
-        P4 -->|send| LLM4[OpenRouterLLM.generate]
-        LLM4 --> H
-        TSEL -- No --> P2
-    end
-
-    subgraph OpenRouter
-        LLM1
-        LLM2
-        LLM3
-        LLM4
+    subgraph AdvancedPlanExecuteAgent
+        EXEC --> TOOLQ{Step mentions tool?}
+        TOOLQ -- Yes --> TEXEC[tool.execute]
+        TEXEC --> P4[tool_interpretation_prompt]
+        P4 --> LLM4[OpenRouterLLM.generate]
+        LLM4 --> UPDATE
+        TOOLQ -- No --> P2
     end
 ```
 
