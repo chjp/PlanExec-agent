@@ -30,6 +30,16 @@ Run the script:
 ```bash
 python agent.py
 ```
+
+You can also pass the task on the command line or enter it interactively:
+
+```bash
+# Pass task via CLI args
+python agent.py "Create a brief guide about Python decorators"
+
+# Or run without args and you'll be prompted to input a task
+python agent.py
+```
 The key components are:
 
 - **OpenRouterLLM**: Handles API calls to DeepSeek v3 through OpenRouter.

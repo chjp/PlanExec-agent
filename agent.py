@@ -6,6 +6,7 @@ Uses DeepSeek v3 through OpenRouter API
 import json
 import re
 import os
+import sys
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 import requests
@@ -376,7 +377,19 @@ def main():
         # Register example tools (optional)
         agent.register_tool(SearchTool())
         
-        result = agent.run("Create a brief guide about Python decorators")
+        # Read task from CLI args or prompt the user
+        if len(sys.argv) > 1:
+            task = " ".join(sys.argv[1:]).strip()
+        else:
+            try:
+                task = input("Enter a task for the agent (press Enter for a default example): ").strip()
+            except EOFError:
+                task = ""
+        if not task:
+            task = "Create a brief guide about Python decorators"
+        print(f"\nTask: {task}")
+        
+        result = agent.run(task)
         
         print("\n" + "="*60)
         print("FINAL OUTPUT:")
