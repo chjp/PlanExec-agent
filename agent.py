@@ -111,7 +111,8 @@ class PlanAndExecuteAgent:
     4. Returns the final result
     """
     
-    def __init__(self, api_key: Optional[str] = None, model: str = "deepseek/deepseek-chat", verbose: bool = True):
+    def __init__(self, api_key: Optional[str] = None, model: str = "deepseek/deepseek-chat", verbose: bool = True,
+                 tools: Optional[Dict[str, "Tool"]] = None):
         """
         Initialize the agent
         
@@ -119,11 +120,19 @@ class PlanAndExecuteAgent:
             api_key: OpenRouter API key (or set OPENROUTER_API_KEY env variable)
             model: Model to use (default: deepseek/deepseek-chat)
             verbose: Whether to print progress
+            tools: Optional dict of tools the agent can use (name -> Tool)
         """
         self.llm = OpenRouterLLM(api_key=api_key, model=model)
         self.verbose = verbose
         self.plan: List[Step] = []
         self.execution_history: List[Dict[str, Any]] = []
+        self.tools: Dict[str, Tool] = tools or {}
+
+    def register_tool(self, tool: "Tool"):
+        """Register a tool for the agent to use"""
+        self.tools[tool.name] = tool
+        if self.verbose:
+            print(f"🔧 Registered tool: {tool.name}")
     
     def create_plan(self, task: str) -> List[Step]:
         """Generate a plan for the given task"""
@@ -173,23 +182,45 @@ class PlanAndExecuteAgent:
         return steps
     
     def execute_step(self, step: Step) -> str:
-        """Execute a single step of the plan"""
+        """Execute a single step of the plan (with optional tool usage)"""
         
+        # Try tools first if any are registered and referenced by the step description
+        for tool_name, tool in self.tools.items():
+            if tool_name.lower() in step.description.lower():
+                if self.verbose:
+                    print(f"  🔧 Using tool: {tool_name}")
+                try:
+                    tool_result = tool.execute(step.description)
+                    prompt = tool_interpretation_prompt(tool_name, tool_result, step.description)
+                    enhanced_result = self.llm.generate(prompt, temperature=0.7)
+                    step.result = f"{tool_result}\n\nAnalysis: {enhanced_result}"
+                    step.status = "completed"
+                    # Store in history
+                    self.execution_history.append({
+                        "step_id": step.id,
+                        "description": step.description,
+                        "result": step.result
+                    })
+                    if self.verbose:
+                        print(f"  ✅ Result: {step.result[:150]}...")
+                    return step.result
+                except Exception as e:
+                    if self.verbose:
+                        print(f"  ⚠️ Tool execution failed: {str(e)}")
+                    # Fall through to regular LLM execution
+        
+        # Regular LLM execution (fallback or when no tools apply)
         context = self._get_context()
-        
         prompt = execution_prompt(step.description, context)
         
         if self.verbose:
             print(f"\n⚙️  Executing Step {step.id}: {step.description}")
         
-        # Execute via LLM with higher temperature for creativity
         result = self.llm.generate(prompt, temperature=0.7, max_tokens=1500)
         
-        # Update step status
         step.status = "completed"
         step.result = result
         
-        # Store in history
         self.execution_history.append({
             "step_id": step.id,
             "description": step.description,
@@ -337,46 +368,7 @@ class CalculatorTool(Tool):
 
 
 # Advanced Agent with Tools
-class AdvancedPlanExecuteAgent(PlanAndExecuteAgent):
-    """Extended version with tool support"""
-    
-    def __init__(self, api_key: Optional[str] = None, model: str = "deepseek/deepseek-chat", 
-                 tools: Optional[Dict[str, Tool]] = None, verbose: bool = True):
-        super().__init__(api_key, model, verbose)
-        self.tools = tools or {}
-        
-    def register_tool(self, tool: Tool):
-        """Register a tool for the agent to use"""
-        self.tools[tool.name] = tool
-        if self.verbose:
-            print(f"🔧 Registered tool: {tool.name}")
-    
-    def execute_step(self, step: Step) -> str:
-        """Enhanced execution that can use tools"""
-        
-        # Check if step mentions any tool
-        for tool_name, tool in self.tools.items():
-            if tool_name.lower() in step.description.lower():
-                if self.verbose:
-                    print(f"  🔧 Using tool: {tool_name}")
-                try:
-                    # Execute tool
-                    tool_result = tool.execute(step.description)
-                    
-                    # Enhance with LLM interpretation
-                    prompt = tool_interpretation_prompt(tool_name, tool_result, step.description)
-                    
-                    enhanced_result = self.llm.generate(prompt, temperature=0.7)
-                    step.result = f"{tool_result}\n\nAnalysis: {enhanced_result}"
-                    step.status = "completed"
-                    return step.result
-                    
-                except Exception as e:
-                    if self.verbose:
-                        print(f"  ⚠️ Tool execution failed: {str(e)}")
-        
-        # Fall back to regular LLM execution
-        return super().execute_step(step)
+# (Removed AdvancedPlanExecuteAgent; functionality merged into PlanAndExecuteAgent.)
 
 
 def main():
@@ -392,39 +384,24 @@ def main():
         print("\nFor now, running in demo mode with mock responses...\n")
         return
     
-    # Basic agent with DeepSeek v3
-    print("EXAMPLE 1: Basic Plan-and-Execute Agent with DeepSeek v3")
+    # Unified agent (with optional tools)
+    print("Unified Plan-and-Execute Agent (tool-enabled)")
     print("-" * 60)
     
     try:
         agent = PlanAndExecuteAgent(api_key=api_key, verbose=True)
-        result = agent.run("Create a brief guide about Python decorators")
+        # Register example tools (optional)
+        agent.register_tool(SearchTool())
+        agent.register_tool(CalculatorTool())
+        
+        result = agent.run("Calculate the compound interest on $10,000 at 5% for 10 years")
         
         print("\n" + "="*60)
         print("FINAL OUTPUT:")
         print(json.dumps(result, indent=2)[:1000] + "...")  # Truncate for display
         
     except Exception as e:
-        print(f"Error running basic agent: {str(e)}")
-    
-    # Advanced agent with tools
-    print("\n\n" + "="*60)
-    print("EXAMPLE 2: Advanced Agent with Tools")
-    print("-" * 60)
-    
-    try:
-        advanced_agent = AdvancedPlanExecuteAgent(api_key=api_key, verbose=True)
-        advanced_agent.register_tool(SearchTool())
-        advanced_agent.register_tool(CalculatorTool())
-        
-        result2 = advanced_agent.run("Calculate the compound interest on $10,000 at 5% for 10 years")
-        
-        print("\n" + "="*60)
-        print("FINAL OUTPUT:")
-        print(json.dumps(result2, indent=2)[:1000] + "...")  # Truncate for display
-        
-    except Exception as e:
-        print(f"Error running advanced agent: {str(e)}")
+        print(f"Error running agent: {str(e)}")
 
 
 if __name__ == "__main__":
