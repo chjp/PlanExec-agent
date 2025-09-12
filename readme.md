@@ -32,12 +32,11 @@ python agent.py
 ```
 The key components are:
 
-- **OpenRouterLLM**: Handles API calls to DeepSeek v3 through OpenRouter
-- **PlanAndExecuteAgent**: Core agent that creates plans and executes them step by step
-- **AdvancedPlanExecuteAgent**: Extended version with tool support
-- **Tool classes**: Extensible framework for adding capabilities like search, calculations, etc.
+- **OpenRouterLLM**: Handles API calls to DeepSeek v3 through OpenRouter.
+- **PlanAndExecuteAgent**: Unified agent that creates plans, executes them step by step, and can optionally use tools.
+- **Tool classes**: Extensible framework for adding capabilities (example included: `SearchTool`).
 
-The agent will automatically break down any task into steps, execute each step using DeepSeek v3, and synthesize the results into a final output.
+The agent will automatically break down any task into steps, execute each step using DeepSeek v3, optionally invoke tools, and synthesize the results into a final output.
 
 ## Architecture
 
@@ -52,26 +51,22 @@ flowchart TD
     PARSE --> LOOP[For each Step]
     LOOP --> EXEC[execute_step]
     EXEC --> CTX[_get_context]
-    EXEC --> P2[execution_prompt]
+    EXEC --> TOOLQ{Tool referenced?}
+    TOOLQ -- Yes --> TEXEC[tool.execute]
+    TEXEC --> P4[tool_interpretation_prompt]
+    P4 --> LLM4[OpenRouterLLM.generate]
+    LLM4 --> UPDATE[Update step status/result]
+    TOOLQ -- No --> P2[execution_prompt]
     P2 --> LLM2[OpenRouterLLM.generate]
-    LLM2 --> UPDATE[Update step status/result]
+    LLM2 --> UPDATE
     UPDATE --> LOOP
     LOOP --> SYN[_synthesize_results]
     SYN --> P3[synthesis_prompt]
     P3 --> LLM3[OpenRouterLLM.generate]
     LLM3 --> FINAL[Final Result]
-
-    subgraph AdvancedPlanExecuteAgent
-        EXEC --> TOOLQ{Step mentions tool?}
-        TOOLQ -- Yes --> TEXEC[tool.execute]
-        TEXEC --> P4[tool_interpretation_prompt]
-        P4 --> LLM4[OpenRouterLLM.generate]
-        LLM4 --> UPDATE
-        TOOLQ -- No --> P2
-    end
 ```
 
 Notes:
 - Prompts are constructed in `prompts.py` and consumed by `agent.py`.
 - API key is read from `.env` via `python-dotenv` (`OPENROUTER_API_KEY`).
-- `AdvancedPlanExecuteAgent` extends the base execution by invoking registered `Tool`s when referenced by step descriptions.
+- The unified `PlanAndExecuteAgent` invokes registered `Tool`s when their names appear in step descriptions (example tool: `SearchTool`).

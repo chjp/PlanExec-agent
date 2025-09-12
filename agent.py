@@ -8,7 +8,6 @@ import re
 import os
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
-from enum import Enum
 import requests
 from dotenv import load_dotenv
 
@@ -348,23 +347,7 @@ class SearchTool(Tool):
         return f"Search results for '{query}': [Would return real search results in production]"
 
 
-class CalculatorTool(Tool):
-    """Simple calculator tool"""
-    def __init__(self):
-        super().__init__("calculator", "Perform mathematical calculations")
-    
-    def execute(self, expression: str) -> str:
-        try:
-            # Extract math expression from the step description
-            import re
-            numbers = re.findall(r'[\d\.\+\-\*\/\(\)]+', expression)
-            if numbers:
-                expr = numbers[0]
-                result = eval(expr)
-                return f"Calculation result: {expr} = {result}"
-            return "No valid mathematical expression found"
-        except Exception as e:
-            return f"Error in calculation: {str(e)}"
+ 
 
 
 # Advanced Agent with Tools
@@ -392,9 +375,8 @@ def main():
         agent = PlanAndExecuteAgent(api_key=api_key, verbose=True)
         # Register example tools (optional)
         agent.register_tool(SearchTool())
-        agent.register_tool(CalculatorTool())
         
-        result = agent.run("Calculate the compound interest on $10,000 at 5% for 10 years")
+        result = agent.run("Create a brief guide about Python decorators")
         
         print("\n" + "="*60)
         print("FINAL OUTPUT:")
