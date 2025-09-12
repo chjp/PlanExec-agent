@@ -435,14 +435,22 @@ def main():
         # Register example tools (optional)
         agent.register_tool(SearchTool())
         
-        # Read task from CLI args or prompt the user
+        # Read task from CLI args or prompt the user (supports multi-line input terminated by END)
         if len(sys.argv) > 1:
             task = " ".join(sys.argv[1:]).strip()
         else:
-            try:
-                task = input("Enter a task for the agent (press Enter for a default example): ").strip()
-            except EOFError:
-                task = ""
+            print("Enter a task for the agent. Type END on a new line to finish (press Enter immediately for a default example):")
+            lines: List[str] = []
+            while True:
+                try:
+                    line = input()
+                except EOFError:
+                    break
+                if line.strip() == "END":
+                    break
+                # If the user just hits Enter on the very first line, treat as empty -> use default later
+                lines.append(line)
+            task = "\n".join(lines).strip()
         if not task:
             task = "Create a brief guide about Python decorators"
         print(f"\nTask: {task}")
