@@ -80,3 +80,17 @@ Notes:
 - Prompts are constructed in `prompts.py` and consumed by `agent.py`.
 - API key is read from `.env` via `python-dotenv` (`OPENROUTER_API_KEY`).
 - The unified `PlanAndExecuteAgent` invokes registered `Tool`s when their names appear in step descriptions (example tool: `SearchTool`).
+
+## Logging
+
+- Each run writes a detailed session log to the `agentlog/` directory next to `agent.py`.
+- The log file name is timestamped as `yyyymmddhhmm.log` (e.g., `202509112259.log`).
+- Logged details include:
+  - Planning prompts and LLM responses.
+  - Parsed steps (or fallback plan notice).
+  - Execution prompts and LLM responses for each step.
+  - Tool selections, tool outputs, and the tool-interpretation prompts and LLM responses.
+  - Synthesis prompt and final LLM response.
+  - Any errors encountered during planning, execution, or synthesis.
+
+You can open the latest file in `agentlog/` to see the full trace of what the agent did for that session.

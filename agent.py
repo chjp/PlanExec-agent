@@ -7,6 +7,7 @@ import json
 import re
 import os
 import sys
+from datetime import datetime
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 import requests
@@ -127,6 +128,42 @@ class PlanAndExecuteAgent:
         self.plan: List[Step] = []
         self.execution_history: List[Dict[str, Any]] = []
         self.tools: Dict[str, Tool] = tools or {}
+        # Logging
+        self.log_dir = os.path.join(os.path.dirname(__file__), "agentlog")
+        self.log_file_path: Optional[str] = None
+
+    def _start_session_log(self, task: str):
+        """Initialize a per-run session log file under agentlog/ named yyyymmddhhmm.log"""
+        try:
+            os.makedirs(self.log_dir, exist_ok=True)
+            ts = datetime.now().strftime("%Y%m%d%H%M")
+            self.log_file_path = os.path.join(self.log_dir, f"{ts}.log")
+            header = (
+                f"=== Agent Run Started: {datetime.now().isoformat()} ===\n"
+                f"Model: {self.llm.model}\n"
+                f"Task: {task}\n"
+                f"Log File: {self.log_file_path}\n"
+                "===============================================\n\n"
+            )
+            self._log(header, prefix_time=False)
+        except Exception as e:
+            # Do not crash the agent if logging fails
+            if self.verbose:
+                print(f"⚠️  Failed to start session log: {e}")
+
+    def _log(self, message: str, prefix_time: bool = True):
+        """Append a line to the current session log file"""
+        try:
+            if not self.log_file_path:
+                return
+            with open(self.log_file_path, "a", encoding="utf-8") as f:
+                if prefix_time:
+                    f.write(f"[{datetime.now().isoformat()}] {message}\n")
+                else:
+                    f.write(f"{message}\n")
+        except Exception as e:
+            if self.verbose:
+                print(f"⚠️  Failed to write log: {e}")
 
     def register_tool(self, tool: "Tool"):
         """Register a tool for the agent to use"""
@@ -138,12 +175,14 @@ class PlanAndExecuteAgent:
         """Generate a plan for the given task"""
         
         prompt = planning_prompt(task)
+        self._log("[PLANNING] Prompt:\n" + prompt)
         
         if self.verbose:
             print(f"\n🤔 Creating plan for: {task}")
         
         # Get plan from LLM
         plan_text = self.llm.generate(prompt, temperature=0.5)  # Lower temperature for planning
+        self._log("[PLANNING] LLM Response:\n" + plan_text)
         
         if self.verbose:
             print(f"  📝 Raw plan response: {plan_text[:200]}...")
@@ -166,11 +205,14 @@ class PlanAndExecuteAgent:
                 steps.append(step)
                 if self.verbose:
                     print(f"  📋 Step {i}: {step.description}")
+        if steps:
+            self._log("[PLANNING] Parsed Steps:\n" + "\n".join(f"{s.id}. {s.description}" for s in steps))
         
         if not steps:
             # Fallback: create a generic plan if parsing fails
             if self.verbose:
                 print("  ⚠️  Could not parse steps, creating generic plan")
+            self._log("[PLANNING] Fallback generic plan used.")
             steps = [
                 Step(id=1, description=f"Analyze the requirements for: {task}"),
                 Step(id=2, description="Develop a solution approach"),
@@ -190,9 +232,13 @@ class PlanAndExecuteAgent:
                 if self.verbose:
                     print(f"  🔧 Using tool: {tool_name}")
                 try:
+                    self._log(f"[TOOL] Selected: {tool_name} for step {step.id} - '{step.description}'")
                     tool_result = tool.execute(step.description)
+                    self._log(f"[TOOL] Output ({tool_name}):\n{tool_result}")
                     prompt = tool_interpretation_prompt(tool_name, tool_result, step.description)
+                    self._log("[TOOL-INTERPRET] Prompt:\n" + prompt)
                     enhanced_result = self.llm.generate(prompt, temperature=0.7)
+                    self._log("[TOOL-INTERPRET] LLM Response:\n" + enhanced_result)
                     step.result = f"{tool_result}\n\nAnalysis: {enhanced_result}"
                     step.status = "completed"
                     # Store in history
@@ -207,16 +253,19 @@ class PlanAndExecuteAgent:
                 except Exception as e:
                     if self.verbose:
                         print(f"  ⚠️ Tool execution failed: {str(e)}")
+                    self._log(f"[TOOL] ERROR for {tool_name}: {e}")
                     # Fall through to regular LLM execution
         
         # Regular LLM execution (fallback or when no tools apply)
         context = self._get_context()
         prompt = execution_prompt(step.description, context)
+        self._log(f"[EXECUTION] Step {step.id} Prompt:\n" + prompt)
         
         if self.verbose:
             print(f"\n⚙️  Executing Step {step.id}: {step.description}")
         
         result = self.llm.generate(prompt, temperature=0.7, max_tokens=1500)
+        self._log(f"[EXECUTION] Step {step.id} LLM Response:\n" + result)
         
         step.status = "completed"
         step.result = result
@@ -256,14 +305,18 @@ class PlanAndExecuteAgent:
         # Reset state for new task
         self.plan = []
         self.execution_history = []
+        # Start session log
+        self._start_session_log(task)
         
         # Phase 1: Planning
         try:
             self.create_plan(task)
         except Exception as e:
+            self._log(f"[PLANNING] ERROR: {e}")
             return {"error": f"Failed to create plan: {str(e)}"}
         
         if not self.plan:
+            self._log("[PLANNING] No steps generated.")
             return {"error": "Failed to create plan - no steps generated"}
         
         # Phase 2: Execution
@@ -280,9 +333,11 @@ class PlanAndExecuteAgent:
                     print(f"  ❌ Error executing step {step.id}: {str(e)}")
                 step.status = "failed"
                 step.result = f"Error: {str(e)}"
+                self._log(f"[EXECUTION] ERROR at step {step.id}: {e}")
         
         # Phase 3: Synthesize results
         final_result = self._synthesize_results()
+        self._log("[RUN] Final Result Prepared.")
         
         return {
             "task": task,
@@ -315,11 +370,14 @@ class PlanAndExecuteAgent:
             self.plan[0].description if self.plan else 'Unknown task',
             all_results[:3000]
         )
+        self._log("[SYNTHESIS] Prompt:\n" + prompt)
         
         try:
             final = self.llm.generate(prompt, temperature=0.5, max_tokens=2000)
+            self._log("[SYNTHESIS] LLM Response:\n" + final)
         except Exception as e:
             final = f"Error synthesizing results: {str(e)}\n\nRaw results:\n{all_results[:1000]}"
+            self._log(f"[SYNTHESIS] ERROR: {e}")
         
         if self.verbose:
             print(f"\n✨ Final Result: {final[:200]}...")
