@@ -1,0 +1,52 @@
+<mxfile host="app.diagrams.net" modified="2025-09-16T00:00:00.000Z" agent="Mozilla/5.0" version="24.6.1" type="device">
+  <diagram id="F7o4mXwqZp0bCwQpQ" name="Page-1">
+    <mxGraphModel dx="1000" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="850" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <mxCell id="u" value="User / CLI" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="80" width="140" height="60" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="agent" value="PlanAndExecuteAgent" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="230" y="60" width="240" height="170" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="plan" value="plan" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="255" y="130" width="90" height="40" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="hist" value="history" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="355" y="130" width="90" height="40" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="tools" value="Tools" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="230" y="260" width="240" height="110" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="llm" value="OpenRouterLLM (DeepSeek v3.1)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="520" y="70" width="320" height="80" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="logs" value="agentlog/yyyymmddhhmm.log" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="520" y="200" width="320" height="60" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e1" edge="1" parent="1" source="u" target="agent" style="endArrow=block;endFill=1;strokeWidth=2;">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="agent" target="llm" style="endArrow=block;endFill=1;strokeWidth=2;">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="agent" target="tools" style="endArrow=block;endFill=1;strokeWidth=2;">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e4" edge="1" parent="1" source="llm" target="logs" style="endArrow=block;endFill=1;strokeWidth=2;">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
+

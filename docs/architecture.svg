@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="420" viewBox="0 0 900 420">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="10" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,3 L0,6 z" fill="#555" />
+    </marker>
+    <style>
+      .box { fill: #ffffff; stroke: #888; stroke-width: 2; rx: 8; ry: 8; }
+      .box.blue { fill: #dae8fc; stroke: #6c8ebf; }
+      .box.green { fill: #d5e8d4; stroke: #82b366; }
+      .box.orange { fill: #ffe6cc; stroke: #d79b00; }
+      .label { font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; font-size: 14px; fill: #222; }
+      .title { font-weight: 600; font-size: 16px; }
+    </style>
+  </defs>
+
+  <!-- Title -->
+  <text x="20" y="30" class="label title">PlanExec Agent – High-Level Architecture (draw.io export placeholder)</text>
+
+  <!-- User -->
+  <rect x="20" y="70" width="160" height="60" class="box" />
+  <text x="100" y="105" text-anchor="middle" class="label">User / CLI</text>
+
+  <!-- Agent -->
+  <rect x="220" y="60" width="230" height="170" class="box blue" />
+  <text x="335" y="90" text-anchor="middle" class="label title">PlanAndExecuteAgent</text>
+  <text x="335" y="115" text-anchor="middle" class="label">planning ➜ execution ➜ synthesis</text>
+  <rect x="245" y="130" width="90" height="40" class="box" />
+  <text x="290" y="155" text-anchor="middle" class="label">plan</text>
+  <rect x="345" y="130" width="90" height="40" class="box" />
+  <text x="390" y="155" text-anchor="middle" class="label">history</text>
+
+  <!-- Tools -->
+  <rect x="220" y="260" width="230" height="110" class="box green" />
+  <text x="335" y="290" text-anchor="middle" class="label title">Tools</text>
+  <text x="335" y="313" text-anchor="middle" class="label">search, etc. (optional)</text>
+
+  <!-- LLM -->
+  <rect x="520" y="70" width="320" height="80" class="box orange" />
+  <text x="680" y="105" text-anchor="middle" class="label title">OpenRouterLLM (DeepSeek v3.1)</text>
+  <text x="680" y="125" text-anchor="middle" class="label">/v1/chat/completions</text>
+
+  <!-- Logs -->
+  <rect x="520" y="200" width="320" height="60" class="box" />
+  <text x="680" y="235" text-anchor="middle" class="label">agentlog/yyyymmddhhmm.log</text>
+
+  <!-- Edges -->
+  <line x1="180" y1="100" x2="220" y2="100" stroke="#555" stroke-width="2" marker-end="url(#arrow)" />
+  <line x1="450" y1="100" x2="520" y2="100" stroke="#555" stroke-width="2" marker-end="url(#arrow)" />
+  <line x1="680" y1="150" x2="680" y2="200" stroke="#555" stroke-width="2" marker-end="url(#arrow)" />
+  <line x1="335" y1="230" x2="335" y2="260" stroke="#555" stroke-width="2" marker-end="url(#arrow)" />
+  
+  <!-- Captions -->
+  <text x="200" y="90" class="label">task, confirms</text>
+  <text x="485" y="90" class="label">prompt</text>
+  <text x="690" y="185" class="label">logs</text>
+  <text x="345" y="250" class="label">invokes</text>
+
+</svg>
+

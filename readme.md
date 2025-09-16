@@ -95,6 +95,18 @@ Notes:
 
 You can open the latest file in `agentlog/` to see the full trace of what the agent did for that session.
 
+## Diagrams (draw.io / diagrams.net)
+
+GitHub does not natively render `.drawio` diagram sources in Markdown. The recommended approach is to:
+- Keep the editable source as a `.drawio` file in the repo
+- Export to `.svg` (or `.png`) and embed that image in the README
+
+Editable source (for later refinement): `docs/architecture.drawio`
+
+Rendered diagram (exported SVG):
+
+![Architecture (draw.io)](docs/architecture.svg)
+
 ## Design Notes and TODOs
 
 - Chat state is currently stateless per call.
