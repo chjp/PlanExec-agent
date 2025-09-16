@@ -1,6 +1,6 @@
 """
 Minimal Plan-and-Execute LLM Agent Implementation with OpenRouter
-Uses DeepSeek v3 through OpenRouter API
+Uses DeepSeek v3.1 through OpenRouter API
 """
 
 import json
@@ -26,15 +26,15 @@ load_dotenv()
 
 
 class OpenRouterLLM:
-    """OpenRouter LLM client for DeepSeek v3"""
-    
-    def __init__(self, api_key: Optional[str] = None, model: str = "deepseek/deepseek-chat"):
+    """OpenRouter LLM client for DeepSeek v3.1"""
+
+    def __init__(self, api_key: Optional[str] = None, model: str = "deepseek/deepseek-chat-v3.1"):
         """
         Initialize OpenRouter client
-        
+
         Args:
             api_key: OpenRouter API key (or set OPENROUTER_API_KEY env variable)
-            model: Model to use (default: deepseek/deepseek-chat for DeepSeek v3)
+            model: Model to use (default: deepseek/deepseek-chat-v3.1 for DeepSeek v3.1)
         """
         self.api_key = api_key or os.getenv("OPENROUTER_API_KEY")
         if not self.api_key:
@@ -105,21 +105,21 @@ class Step:
 
 class PlanAndExecuteAgent:
     """
-    A Plan-and-Execute agent using DeepSeek v3 via OpenRouter that:
+    A Plan-and-Execute agent using DeepSeek v3.1 via OpenRouter that:
     1. Takes a task/goal
     2. Creates a plan by breaking it down into steps
     3. Executes each step sequentially
     4. Returns the final result
     """
     
-    def __init__(self, api_key: Optional[str] = None, model: str = "deepseek/deepseek-chat", verbose: bool = True,
+    def __init__(self, api_key: Optional[str] = None, model: str = "deepseek/deepseek-chat-v3.1", verbose: bool = True,
                  tools: Optional[Dict[str, "Tool"]] = None):
         """
         Initialize the agent
-        
+
         Args:
             api_key: OpenRouter API key (or set OPENROUTER_API_KEY env variable)
-            model: Model to use (default: deepseek/deepseek-chat)
+            model: Model to use (default: deepseek/deepseek-chat-v3.1)
             verbose: Whether to print progress
             tools: Optional dict of tools the agent can use (name -> Tool)
         """
@@ -173,7 +173,7 @@ class PlanAndExecuteAgent:
     
     def create_plan(self, task: str) -> List[Step]:
         """Generate a plan for the given task"""
-        
+
         prompt = planning_prompt(task)
         self._log("[PLANNING] Prompt:\n" + prompt)
         
@@ -222,7 +222,32 @@ class PlanAndExecuteAgent:
         
         self.plan = steps
         return steps
-    
+
+    def _confirm_step_execution(self, step: Step) -> bool:
+        """Prompt the user to confirm execution of a step"""
+
+        prompt_text = f"Proceed with Step {step.id} ({step.description})? [Y/N]: "
+        if self.verbose:
+            prompt_text = "\n" + prompt_text
+
+        while True:
+            try:
+                user_input = input(prompt_text).strip().lower()
+            except EOFError:
+                if self.verbose:
+                    print("  ⚠️  No input detected; proceeding automatically.")
+                self._log(f"[EXECUTION] Step {step.id} auto-confirmed (no user input available).")
+                return True
+
+            if user_input in {"y", "yes"}:
+                self._log(f"[EXECUTION] Step {step.id} confirmed by user.")
+                return True
+            if user_input in {"n", "no"}:
+                self._log(f"[EXECUTION] Step {step.id} skipped by user.")
+                return False
+
+            print("  ↩️  Please respond with 'Y' or 'N'.")
+
     def execute_step(self, step: Step) -> str:
         """Execute a single step of the plan (with optional tool usage)"""
         
@@ -326,6 +351,19 @@ class PlanAndExecuteAgent:
             print("="*60)
         
         for step in self.plan:
+            if not self._confirm_step_execution(step):
+                step.status = "skipped"
+                step.result = "Step skipped by user."
+                self.execution_history.append({
+                    "step_id": step.id,
+                    "description": step.description,
+                    "result": step.result
+                })
+                self._log(f"[EXECUTION] Step {step.id} marked as skipped by user request.")
+                if self.verbose:
+                    print(f"  ⏭️  Step {step.id} skipped by user.")
+                continue
+
             try:
                 self.execute_step(step)
             except Exception as e:
