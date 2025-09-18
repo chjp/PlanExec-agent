@@ -1,0 +1,15 @@
+[project]
+name = "planexec-agent"
+version = "0.1.0"
+description = "Minimal Plan-and-Execute LLM Agent Implementation with OpenRouter."
+readme = "readme.md"
+requires-python = ">=3.9"
+dependencies = [
+    "requests>=2.31.0,<3.0.0",
+    "python-dotenv>=1.0.1,<2.0.0",
+    "duckduckgo_search>=5.3.0,<6.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

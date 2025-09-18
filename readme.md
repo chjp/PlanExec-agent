@@ -1,19 +1,17 @@
 To use this code:
 
-Create and activate a Python virtual environment (recommended):
+Install [uv](https://docs.astral.sh/uv/) if you do not already have it available. On macOS/Linux you can run:
 
 ```bash
-# Create a virtual environment in a .venv folder
-python3 -m venv .venv
-
-# Activate it (macOS/Linux)
-source .venv/bin/activate
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-Install the required packages:
+Create the project environment and install dependencies with uv (this writes to `.venv/` by default):
 
 ```bash
-pip install -r requirements.txt
+uv venv
+source .venv/bin/activate
+uv sync
 ```
 
 Get your OpenRouter API key from [OpenRouter](https://openrouter.ai/keys)
@@ -28,17 +26,17 @@ Note: The app automatically loads environment variables from `.env` using `pytho
 Run the script:
 
 ```bash
-python agent.py
+uv run python agent.py
 ```
 
 You can also pass the task on the command line or enter it interactively:
 
 ```bash
 # Pass task via CLI args
-python agent.py "Create a brief guide about Python decorators"
+uv run python agent.py "Create a brief guide about Python decorators"
 
 # Or run without args and you'll be prompted to input a task
-python agent.py
+uv run python agent.py
 ```
 The key components are:
 
