@@ -19,7 +19,10 @@ from prompts import (
     execution_prompt,
     synthesis_prompt,
     tool_interpretation_prompt,
+    tool_invocation_prompt,
 )
+
+from tools import Tool, create_project_tools
 
 # Load environment variables from a .env file if present
 load_dotenv()
@@ -113,7 +116,7 @@ class PlanAndExecuteAgent:
     """
     
     def __init__(self, api_key: Optional[str] = None, model: str = "deepseek/deepseek-chat-v3.1", verbose: bool = True,
-                 tools: Optional[Dict[str, "Tool"]] = None):
+                 project_dir: Optional[str] = None, tools: Optional[Dict[str, Tool]] = None):
         """
         Initialize the agent
 
@@ -121,13 +124,18 @@ class PlanAndExecuteAgent:
             api_key: OpenRouter API key (or set OPENROUTER_API_KEY env variable)
             model: Model to use (default: deepseek/deepseek-chat-v3.1)
             verbose: Whether to print progress
+            project_dir: Base directory for project-aware tools (defaults to this file's directory)
             tools: Optional dict of tools the agent can use (name -> Tool)
         """
         self.llm = OpenRouterLLM(api_key=api_key, model=model)
         self.verbose = verbose
+        self.project_dir = os.path.abspath(project_dir or os.path.dirname(__file__))
         self.plan: List[Step] = []
         self.execution_history: List[Dict[str, Any]] = []
-        self.tools: Dict[str, Tool] = tools or {}
+        self.tools: Dict[str, Tool] = {}
+        initial_tools = tools if tools is not None else create_project_tools(self.project_dir)
+        for tool in initial_tools.values():
+            self.register_tool(tool)
         # Logging
         self.log_dir = os.path.join(os.path.dirname(__file__), "agentlog")
         self.log_file_path: Optional[str] = None
@@ -165,16 +173,62 @@ class PlanAndExecuteAgent:
             if self.verbose:
                 print(f"⚠️  Failed to write log: {e}")
 
-    def register_tool(self, tool: "Tool"):
-        """Register a tool for the agent to use"""
+    def register_tool(self, tool: Tool):
+        """Register a tool for the agent to use."""
+        existing = tool.name in self.tools
         self.tools[tool.name] = tool
+        self._log(f"[TOOL] Registered {tool.name} (replaced={existing})")
         if self.verbose:
-            print(f"🔧 Registered tool: {tool.name}")
+            action = "Replaced" if existing else "Registered"
+            print(f"🔧 {action} tool: {tool.name}")
     
+    def _tool_planning_hints(self) -> List[str]:
+        """Return formatted hints about available tools."""
+
+        return [tool.build_planning_hint() for tool in self.tools.values()]
+
+    def _prepare_tool_arguments(self, tool: Tool, step: Step) -> Dict[str, Any]:
+        """Use the LLM to produce structured arguments for a tool call."""
+
+        prompt = tool_invocation_prompt(
+            tool.name,
+            tool.description,
+            step.description,
+            tool.get_argument_prompt_spec(),
+            tool.example_json,
+        )
+        self._log(f"[TOOL] Invocation Prompt ({tool.name}):\n{prompt}")
+        response = self.llm.generate(prompt, temperature=0.0, max_tokens=400)
+        self._log(f"[TOOL] Invocation Response ({tool.name}):\n{response}")
+        arguments = self._extract_json_object(response)
+        if "error" in arguments:
+            raise ValueError(arguments["error"])
+        return arguments
+
+    def _extract_json_object(self, text: str) -> Dict[str, Any]:
+        """Extract the first JSON object from model output."""
+
+        stripped = text.strip()
+        start_idx = stripped.find("{")
+        end_idx = stripped.rfind("}")
+        if start_idx == -1 or end_idx == -1 or end_idx <= start_idx:
+            raise ValueError("No JSON object found in tool invocation response.")
+
+        json_text = stripped[start_idx:end_idx + 1]
+        try:
+            data = json.loads(json_text)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Invalid JSON from tool invocation: {exc}") from exc
+
+        if not isinstance(data, dict):
+            raise ValueError("Tool invocation response must be a JSON object.")
+
+        return data
+
     def create_plan(self, task: str) -> List[Step]:
         """Generate a plan for the given task"""
 
-        prompt = planning_prompt(task)
+        prompt = planning_prompt(task, self._tool_planning_hints())
         self._log("[PLANNING] Prompt:\n" + prompt)
         
         if self.verbose:
@@ -249,63 +303,85 @@ class PlanAndExecuteAgent:
             print("  ↩️  Please respond with 'Y' or 'N'.")
 
     def execute_step(self, step: Step) -> str:
-        """Execute a single step of the plan (with optional tool usage)"""
-        
-        # Try tools first if any are registered and referenced by the step description
+        """Execute a single step of the plan (with optional tool usage)."""
+
+        selected_tool: Optional[Tool] = None
         for tool_name, tool in self.tools.items():
             if tool_name.lower() in step.description.lower():
+                selected_tool = tool
+                break
+
+        if selected_tool:
+            if self.verbose:
+                print(f"  🔧 Using tool: {selected_tool.name}")
+            try:
+                self._log(
+                    f"[TOOL] Selected: {selected_tool.name} for step {step.id} - '{step.description}'"
+                )
+                tool_arguments = self._prepare_tool_arguments(selected_tool, step)
+                formatted_arguments = selected_tool.format_arguments_for_logging(tool_arguments)
+                self._log(f"[TOOL] Arguments ({selected_tool.name}):\n{formatted_arguments}")
+                tool_output = selected_tool.execute(tool_arguments)
+                self._log(f"[TOOL] Output ({selected_tool.name}):\n{tool_output}")
+                prompt = tool_interpretation_prompt(
+                    selected_tool.name,
+                    tool_output,
+                    step.description,
+                    tool_arguments,
+                )
+                self._log("[TOOL-INTERPRET] Prompt:\n" + prompt)
+                enhanced_result = self.llm.generate(prompt, temperature=0.7)
+                self._log("[TOOL-INTERPRET] LLM Response:\n" + enhanced_result)
+                step.status = "completed"
+                step.result = (
+                    f"{enhanced_result}\n\n"
+                    f"Raw Tool Output:\n{tool_output}\n\n"
+                    f"Tool Arguments:\n{formatted_arguments}"
+                )
+                history_entry = {
+                    "step_id": step.id,
+                    "description": step.description,
+                    "result": step.result,
+                    "tool": selected_tool.name,
+                    "tool_arguments": tool_arguments,
+                    "tool_output": tool_output,
+                }
+                self.execution_history.append(history_entry)
                 if self.verbose:
-                    print(f"  🔧 Using tool: {tool_name}")
-                try:
-                    self._log(f"[TOOL] Selected: {tool_name} for step {step.id} - '{step.description}'")
-                    tool_result = tool.execute(step.description)
-                    self._log(f"[TOOL] Output ({tool_name}):\n{tool_result}")
-                    prompt = tool_interpretation_prompt(tool_name, tool_result, step.description)
-                    self._log("[TOOL-INTERPRET] Prompt:\n" + prompt)
-                    enhanced_result = self.llm.generate(prompt, temperature=0.7)
-                    self._log("[TOOL-INTERPRET] LLM Response:\n" + enhanced_result)
-                    step.result = f"{tool_result}\n\nAnalysis: {enhanced_result}"
-                    step.status = "completed"
-                    # Store in history
-                    self.execution_history.append({
-                        "step_id": step.id,
-                        "description": step.description,
-                        "result": step.result
-                    })
-                    if self.verbose:
-                        print(f"  ✅ Result: {step.result[:150]}...")
-                    return step.result
-                except Exception as e:
-                    if self.verbose:
-                        print(f"  ⚠️ Tool execution failed: {str(e)}")
-                    self._log(f"[TOOL] ERROR for {tool_name}: {e}")
-                    # Fall through to regular LLM execution
-        
-        # Regular LLM execution (fallback or when no tools apply)
+                    print(f"  ✅ Result: {enhanced_result[:150]}...")
+                return step.result
+            except Exception as exc:
+                if self.verbose:
+                    print(f"  ⚠️ Tool execution failed: {exc}")
+                self._log(f"[TOOL] ERROR for {selected_tool.name}: {exc}")
+                # Fall back to regular LLM execution
+
         context = self._get_context()
         prompt = execution_prompt(step.description, context)
         self._log(f"[EXECUTION] Step {step.id} Prompt:\n" + prompt)
-        
+
         if self.verbose:
             print(f"\n⚙️  Executing Step {step.id}: {step.description}")
-        
+
         result = self.llm.generate(prompt, temperature=0.7, max_tokens=1500)
         self._log(f"[EXECUTION] Step {step.id} LLM Response:\n" + result)
-        
+
         step.status = "completed"
         step.result = result
-        
-        self.execution_history.append({
-            "step_id": step.id,
-            "description": step.description,
-            "result": result
-        })
-        
+
+        self.execution_history.append(
+            {
+                "step_id": step.id,
+                "description": step.description,
+                "result": result,
+            }
+        )
+
         if self.verbose:
             print(f"  ✅ Result: {result[:150]}...")
-        
+
         return result
-    
+
     def _get_context(self) -> str:
         """Get context from previous step executions"""
         if not self.execution_history:
@@ -423,29 +499,6 @@ class PlanAndExecuteAgent:
         return final
 
 
-# Example Tools (for more advanced implementation)
-class Tool:
-    """Base class for agent tools"""
-    def __init__(self, name: str, description: str):
-        self.name = name
-        self.description = description
-    
-    def execute(self, *args, **kwargs):
-        raise NotImplementedError
-
-
-class SearchTool(Tool):
-    """Mock search tool - replace with real search API"""
-    def __init__(self):
-        super().__init__("search", "Search for information online")
-    
-    def execute(self, query: str) -> str:
-        # In production, use real search API (Google, Bing, DuckDuckGo, etc.)
-        return f"Search results for '{query}': [Would return real search results in production]"
-
-
- 
-
 
 # Advanced Agent with Tools
 # (Removed AdvancedPlanExecuteAgent; functionality merged into PlanAndExecuteAgent.)
@@ -470,9 +523,11 @@ def main():
     
     try:
         agent = PlanAndExecuteAgent(api_key=api_key, verbose=True)
-        # Register example tools (optional)
-        agent.register_tool(SearchTool())
-        
+        if agent.verbose:
+            print("Registered tools:")
+            for tool in agent.tools.values():
+                print(f"  - {tool.name}: {tool.description}")
+
         # Read task from CLI args or prompt the user (supports multi-line input terminated by END)
         if len(sys.argv) > 1:
             task = " ".join(sys.argv[1:]).strip()

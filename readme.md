@@ -44,7 +44,7 @@ The key components are:
 
 - **OpenRouterLLM**: Handles API calls to DeepSeek v3 through OpenRouter.
 - **PlanAndExecuteAgent**: Unified agent that creates plans, executes them step by step, and can optionally use tools.
-- **Tool classes**: Extensible framework for adding capabilities (example included: `SearchTool`).
+- **Tool classes**: Extensible framework for adding capabilities (built-in tools cover file I/O, command execution, web search, and HTTP fetching).
 
 The agent will automatically break down any task into steps, execute each step using DeepSeek v3, optionally invoke tools, and synthesize the results into a final output.
 
@@ -79,7 +79,7 @@ flowchart TD
 Notes:
 - Prompts are constructed in `prompts.py` and consumed by `agent.py`.
 - API key is read from `.env` via `python-dotenv` (`OPENROUTER_API_KEY`).
-- The unified `PlanAndExecuteAgent` invokes registered `Tool`s when their names appear in step descriptions (example tool: `SearchTool`).
+- The unified `PlanAndExecuteAgent` invokes registered `Tool`s when their names appear in step descriptions (see `tools.py` for the default tool set).
 
 ## Logging
 
